@@ -1,5 +1,6 @@
 package darian.saric.rasus;
 
+import darian.saric.rasus.network.EmulatedSystemClock;
 import darian.saric.rasus.util.ScalarTimestamp;
 import darian.saric.rasus.util.VectorTimestamp;
 
@@ -7,8 +8,9 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
-public class Main {
+public class Node {
     private static final long MEASUREMENT_TIME_THRESHOLD_MILIS = 5000;
     private static final long GENERATE_MEASUREMENT_INTERVAL_MILIS = 1000;
     private Set<Integer> measurements = new LinkedHashSet<>();
@@ -16,7 +18,18 @@ public class Main {
     private Map<VectorTimestamp, Integer> vectorTimestamps = new TreeMap<>();
     private int nodeNumber;
     private int nodeIndex;
-    private int eventCount = 0;
+    private AtomicInteger eventCount = new AtomicInteger();
+    private EmulatedSystemClock systemClock = new EmulatedSystemClock();
+
+    public static void main(String[] args) {
+        Node node = new Node();
+        System.out.println("hello");
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
 
 
     private boolean addMeasurement(int m) {
@@ -47,10 +60,14 @@ public class Main {
     }
 
     public void noteEvent() {
-        eventCount++;
+        eventCount.incrementAndGet();
     }
 
     public int getEventCount() {
-        return eventCount;
+        return eventCount.get();
+    }
+
+    public long getSystemTime() {
+        return systemClock.currentTimeMillis();
     }
 }

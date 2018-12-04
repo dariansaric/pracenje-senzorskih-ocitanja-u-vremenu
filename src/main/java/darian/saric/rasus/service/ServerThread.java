@@ -1,6 +1,6 @@
 package darian.saric.rasus.service;
 
-import darian.saric.rasus.Main;
+import darian.saric.rasus.Node;
 import darian.saric.rasus.network.SimpleSimulatedDatagramSocket;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -13,15 +13,15 @@ import java.util.concurrent.Executors;
 
 public class ServerThread implements Runnable {
     private static final int BUFFER_SIZE = 256; // received bytes
-    byte[] sendBuf = new byte[256];// sent bytes
-    private Main main;
+    private byte[] sendBuf = new byte[256];// sent bytes
+    private Node main;
     private ExecutorService threadPool = Executors.newFixedThreadPool
             (Runtime.getRuntime().availableProcessors() - 1);
     private int port;
     private boolean active = true;
 
 
-    public void setMain(Main main) {
+    public void setMain(Node main) {
         this.main = main;
     }
 
@@ -36,10 +36,10 @@ public class ServerThread implements Runnable {
 
     @Override
     public void run() {
-        try (DatagramSocket datagramSocket = new SimpleSimulatedDatagramSocket(port, 0.2, 200)) {
+        try (DatagramSocket datagramSocket = new SimpleSimulatedDatagramSocket(port, 0.2, 200)) { // tODO: lossrate i delay u konfig
 //            datagramSocket.bind(new InetSocketAddress("localhost", port));
             while (active) {
-                byte[] rcvBuf = new byte[256]; // received bytes
+                byte[] rcvBuf = new byte[BUFFER_SIZE]; // received bytes
                 DatagramPacket packet = new DatagramPacket(rcvBuf, rcvBuf.length);
                 datagramSocket.receive(packet);
                 threadPool.submit(new ClientWorker(datagramSocket, packet));
@@ -56,7 +56,7 @@ public class ServerThread implements Runnable {
 //        private PrintWriter writer;
 
 
-        public ClientWorker(DatagramSocket socket, DatagramPacket packet) {
+        ClientWorker(DatagramSocket socket, DatagramPacket packet) {
             this.socket = socket;
             this.packet = packet;
         }
@@ -86,8 +86,7 @@ public class ServerThread implements Runnable {
 
         private void storeMeasurement(JSONObject json) {
             int co = json.getInt("co");
-            // TODO: sinkronizacija skalarnih oznaka vremena uz clock
-            int scalarTimestamp = json.getInt("scalartimestamp");
+            int scalarTimestamp = synchronizeTimestamp(json.getLong("scalartimestamp"));
             int[] vector = new int[main.getNodeNumber()];
             JSONArray array = json.getJSONArray("vectortimestamp");
 
@@ -100,6 +99,13 @@ public class ServerThread implements Runnable {
             vector[main.getNodeIndex()] = main.getEventCount();
 
             main.storeMeasurement(co, scalarTimestamp, vector);
+        }
+
+        private synchronized int synchronizeTimestamp(long scalartimestamp) {
+            if (scalartimestamp > main.getSystemTime()) {
+                //TODO: riješi nekako
+            }
+            return 0;
         }
     }
 }
