@@ -12,7 +12,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ServerThread implements Runnable {
-    //TODO : implementacija poslužitelja
     private static final int BUFFER_SIZE = 256; // received bytes
     byte[] sendBuf = new byte[256];// sent bytes
     private Main main;
@@ -68,6 +67,7 @@ public class ServerThread implements Runnable {
                 //TODO: parsiranje json objekta
                 JSONObject json = new JSONObject(new String(packet.getData(), packet.getOffset(),
                         packet.getLength()));
+                main.noteEvent();
                 // encode a String into a sequence of bytes using the platform's
                 // default charset
 //                sendBuf = rcvStr.toUpperCase().getBytes();
@@ -86,17 +86,18 @@ public class ServerThread implements Runnable {
 
         private void storeMeasurement(JSONObject json) {
             int co = json.getInt("co");
-            int scalarTimestamp = json.getInt("scalartimestamp"); // TODO: sinkronizacija oznaka vremena uz clock
+            // TODO: sinkronizacija skalarnih oznaka vremena uz clock
+            int scalarTimestamp = json.getInt("scalartimestamp");
             int[] vector = new int[main.getNodeNumber()];
             JSONArray array = json.getJSONArray("vectortimestamp");
+
 //                if(array.length() != main.getNodeNumber()) {
             // TODO: neka poruka da je poslan neispravan vektor
 //                }
-
             for (int i = 0; i < array.length(); i++) {
                 vector[i] = array.getInt(i);
             }
-            ++vector[main.getNodeIndex()];
+            vector[main.getNodeIndex()] = main.getEventCount();
 
             main.storeMeasurement(co, scalarTimestamp, vector);
         }

@@ -16,18 +16,15 @@ public class Main {
     private Map<VectorTimestamp, Integer> vectorTimestamps = new TreeMap<>();
     private int nodeNumber;
     private int nodeIndex;
-
-//    public Set<Measurement> getMeasurements() {
-//        return measurements;
-//    }
+    private int eventCount = 0;
 
 
-    private boolean addMeasureMent(int m) {
+    private boolean addMeasurement(int m) {
         return measurements.add(m);
     }
 
     public void storeMeasurement(int m, int scalar, int[] vector) {
-        if(addMeasureMent(m)) {
+        if (addMeasurement(m)) {
             scalarTimestamps.put(new ScalarTimestamp(scalar), m);
             vectorTimestamps.put(new VectorTimestamp(vector), m);
         }
@@ -47,5 +44,13 @@ public class Main {
 
     public void setNodeIndex(int nodeIndex) {
         this.nodeIndex = nodeIndex;
+    }
+
+    public void noteEvent() {
+        eventCount++;
+    }
+
+    public int getEventCount() {
+        return eventCount;
     }
 }
