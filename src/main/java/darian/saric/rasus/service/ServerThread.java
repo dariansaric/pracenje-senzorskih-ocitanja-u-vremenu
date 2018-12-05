@@ -11,9 +11,9 @@ import java.net.DatagramSocket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static darian.saric.rasus.Node.BUFFER_SIZE;
+
 public class ServerThread implements Runnable {
-    private static final int BUFFER_SIZE = 256; // received bytes
-    private byte[] sendBuf = new byte[256];// sent bytes
     private Node main;
     private ExecutorService threadPool = Executors.newFixedThreadPool
             (Runtime.getRuntime().availableProcessors() - 1);
@@ -75,7 +75,7 @@ public class ServerThread implements Runnable {
 
                 // create a DatagramPacket for sending packets
                 DatagramPacket sendPacket = new DatagramPacket("received".getBytes(),
-                        sendBuf.length, packet.getAddress(), packet.getPort());
+                        BUFFER_SIZE, packet.getAddress(), packet.getPort());
                 // send packet
                 socket.send(sendPacket); //SENDTO
                 storeMeasurement(json);
@@ -90,13 +90,15 @@ public class ServerThread implements Runnable {
             int[] vector = new int[main.getNodeNumber()];
             JSONArray array = json.getJSONArray("vectortimestamp");
 
-//                if(array.length() != main.getNodeNumber()) {
-            // TODO: neka poruka da je poslan neispravan vektor
-//                }
+            if (array.length() != main.getNodeNumber()) {
+//             TODO: neka poruka da je poslan neispravan vektor
+                System.out.println("Poslana vektorska oznaka vremena je neispravnih dimenzija");
+                return;
+            }
             for (int i = 0; i < array.length(); i++) {
                 vector[i] = array.getInt(i);
             }
-            vector[main.getNodeIndex()] = main.getEventCount();
+//            vector[main.getNodeIndex()] = main.getEventCount();
 
             main.storeMeasurement(co, scalarTimestamp, vector);
         }

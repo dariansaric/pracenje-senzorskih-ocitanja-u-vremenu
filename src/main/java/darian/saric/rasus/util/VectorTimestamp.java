@@ -1,5 +1,6 @@
 package darian.saric.rasus.util;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -13,6 +14,17 @@ public class VectorTimestamp implements Comparable<VectorTimestamp> {
         }
     }
 
+    public List<Integer> getVector() {
+        return new ArrayList<>(vector);
+    }
+
+    public void setVectorParameter(int index, int value) {
+        vector.set(index, value);
+    }
+
+    public void incrementVectorParameter(int index) {
+        vector.set(index, vector.get(index) + 1);
+    }
     @Override
     public int compareTo(VectorTimestamp o) {
         if (o.vector.size() != vector.size()) {
