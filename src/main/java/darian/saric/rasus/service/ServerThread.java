@@ -36,7 +36,9 @@ public class ServerThread implements Runnable {
 
     @Override
     public void run() {
-        try (DatagramSocket datagramSocket = new SimpleSimulatedDatagramSocket(port, 0.2, 200)) { // tODO: lossrate i delay u konfig
+        try (DatagramSocket datagramSocket = new SimpleSimulatedDatagramSocket(
+                main.getPort(), main.getLossRate(), main.getAverageDelay())) {
+
 //            datagramSocket.bind(new InetSocketAddress("localhost", port));
             while (active) {
                 byte[] rcvBuf = new byte[BUFFER_SIZE]; // received bytes

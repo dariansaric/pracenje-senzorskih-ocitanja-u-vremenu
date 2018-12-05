@@ -4,16 +4,34 @@ import darian.saric.rasus.network.EmulatedSystemClock;
 import darian.saric.rasus.util.ScalarTimestamp;
 import darian.saric.rasus.util.VectorTimestamp;
 
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Node {
+    //todo: pohrana svih susjeda i komunikacija
     public static final int BUFFER_SIZE = 256; // received bytes
+    private static final Path NETWORK_CONFIG_PATH = Paths.get("network.config");
     private static final List<Integer> MEASUREMENTS = fillMeasurements();
     private static final long MEASUREMENT_TIME_THRESHOLD_MILIS = 5000;
     private static final long GENERATE_MEASUREMENT_INTERVAL_MILIS = 1000;
+    private static InetAddress SYSTEM_HOST_ADDRESS;
+
+    static {
+        try {
+            SYSTEM_HOST_ADDRESS = InetAddress.getByName("localhost");
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
+    }
+
     private Set<Integer> measurements = new CopyOnWriteArraySet<>();
     private Map<ScalarTimestamp, Integer> scalarTimestamps = new ConcurrentHashMap<>();
     private Map<VectorTimestamp, Integer> vectorTimestamps = new ConcurrentHashMap<>();
@@ -22,16 +40,51 @@ public class Node {
     private VectorTimestamp lastTimestamp = new VectorTimestamp(0, 0, 0);
     private AtomicInteger eventCount = new AtomicInteger();
     private EmulatedSystemClock systemClock = new EmulatedSystemClock();
+    private int port;
+    private double lossRate;
+    private int averageDelay;
+
+    private Node(String name) throws IOException {
+        for (String l : Files.readAllLines(NETWORK_CONFIG_PATH)) {
+            String[] tokens = l.split("\\s+");
+            if (!tokens[0].equals(name)) {
+                continue;
+            }
+
+            // todo: provjeri ispravnost sadržaja konfiguracijske datoteke
+            port = Integer.parseInt(tokens[1]);
+            lossRate = Double.parseDouble(tokens[2]);
+            averageDelay = Integer.parseInt(tokens[3]);
+        }
+    }
 
     private static List<Integer> fillMeasurements() {
         return new ArrayList<>();
     }
 
-    public static void main(String[] args) {
-        Node node = new Node();
-        node.storeMeasurement(1);
+    public static void main(String[] args) throws IOException {
+        if (args.length != 1) {
+            System.out.println("Očekivan jedan argument: naziv čvora");
+            return;
+        }
+
+        Node node = new Node(args[0]);
+
+//        node.storeMeasurement(1);
         node.startTimers();
 
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public double getLossRate() {
+        return lossRate;
+    }
+
+    public int getAverageDelay() {
+        return averageDelay;
     }
 
     private void startTimers() {
