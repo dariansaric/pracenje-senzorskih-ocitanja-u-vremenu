@@ -25,7 +25,7 @@ public class Node {
      * {@link Path} do podataka o mjerenjima
      */
     private static final Path DATA_PATH = Paths.get("src/main/resources/mjerenja.csv");
-    private static final Path NETWORK_CONFIG_PATH = Paths.get("network.config");
+    private static final Path NETWORK_CONFIG_PATH = Paths.get("src/main/resources/network.config");
     private static final long MEASUREMENT_TIME_THRESHOLD_MILIS = 5000;
     private static final long GENERATE_MEASUREMENT_INTERVAL_MILIS = 1000;
     private static final int NETWORK_CONFIG_PARAM_COUNT = 4;
@@ -47,7 +47,7 @@ public class Node {
     private Map<VectorTimestamp, Integer> vectorTimestamps = new ConcurrentHashMap<>();
     private int nodeNumber;
     private int nodeIndex = 0;
-    private VectorTimestamp lastTimestamp = new VectorTimestamp(0, 0, 0);
+    private VectorTimestamp lastTimestamp;
     private AtomicInteger eventCount = new AtomicInteger();
     private EmulatedSystemClock systemClock = new EmulatedSystemClock();
     private int port;
@@ -56,6 +56,7 @@ public class Node {
 
     private Node(String name) throws IOException {
         configureNode(name);
+        lastTimestamp = new VectorTimestamp(new int[nodeNumber]);
         pool = Executors.newFixedThreadPool(neighbourPackets.size());
     }
 
@@ -144,7 +145,6 @@ public class Node {
             vectorTimestamps.put(lastTimestamp, i);
         }
     }
-
 
     private boolean addMeasurement(int m) {
         return measurements.add(m);

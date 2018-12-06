@@ -1,6 +1,7 @@
 package darian.saric.rasus.util;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -9,9 +10,7 @@ public class VectorTimestamp implements Comparable<VectorTimestamp> {
 
 
     public VectorTimestamp(int... args) {
-        for (int i : args) {
-            vector.add(i);
-        }
+        Arrays.stream(args).forEach(vector::add);
     }
 
     public List<Integer> getVector() {
