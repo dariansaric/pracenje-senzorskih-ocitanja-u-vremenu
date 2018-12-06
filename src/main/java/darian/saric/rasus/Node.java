@@ -1,23 +1,25 @@
 package darian.saric.rasus;
 
 import darian.saric.rasus.network.EmulatedSystemClock;
+import darian.saric.rasus.network.SimpleSimulatedDatagramSocket;
 import darian.saric.rasus.util.ScalarTimestamp;
 import darian.saric.rasus.util.VectorTimestamp;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.net.*;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Node {
-    //todo: pohrana svih susjeda i komunikacija
-    public static final int BUFFER_SIZE = 256; // received bytes
+    //todo: podešavanje i pokretanje poslužitelja
+    //ToDo: testovi na 2,3 čvora
+    public static final String RECEIVED_SIGNAL = "received";
+    private static final int BUFFER_SIZE = 256; // received bytes
     private static final Path NETWORK_CONFIG_PATH = Paths.get("network.config");
     private static final List<Integer> MEASUREMENTS = fillMeasurements();
     private static final long MEASUREMENT_TIME_THRESHOLD_MILIS = 5000;
@@ -32,6 +34,8 @@ public class Node {
         }
     }
 
+    private List<DatagramPacket> neighbourPackets = new LinkedList<>();
+    private ExecutorService pool;
     private Set<Integer> measurements = new CopyOnWriteArraySet<>();
     private Map<ScalarTimestamp, Integer> scalarTimestamps = new ConcurrentHashMap<>();
     private Map<VectorTimestamp, Integer> vectorTimestamps = new ConcurrentHashMap<>();
@@ -47,15 +51,22 @@ public class Node {
     private Node(String name) throws IOException {
         for (String l : Files.readAllLines(NETWORK_CONFIG_PATH)) {
             String[] tokens = l.split("\\s+");
-            if (!tokens[0].equals(name)) {
-                continue;
+
+            if (tokens[0].equals(name)) {
+                port = Integer.parseInt(tokens[1]);
+                lossRate = Double.parseDouble(tokens[2]);
+                averageDelay = Integer.parseInt(tokens[3]);
+            } else {
+                neighbourPackets.add(
+                        new DatagramPacket(
+                                new byte[BUFFER_SIZE], BUFFER_SIZE, SYSTEM_HOST_ADDRESS,
+                                Integer.parseInt(tokens[1]))); // predajem prazan buffer kako bih ga kasnije napunio
             }
 
             // todo: provjeri ispravnost sadržaja konfiguracijske datoteke
-            port = Integer.parseInt(tokens[1]);
-            lossRate = Double.parseDouble(tokens[2]);
-            averageDelay = Integer.parseInt(tokens[3]);
         }
+
+        pool = Executors.newFixedThreadPool(neighbourPackets.size());
     }
 
     private static List<Integer> fillMeasurements() {
@@ -73,6 +84,8 @@ public class Node {
 //        node.storeMeasurement(1);
         node.startTimers();
 
+
+        node.pool.shutdown();
     }
 
     public int getPort() {
@@ -172,11 +185,59 @@ public class Node {
     }
 
     private class MeasureTask extends TimerTask {
+        private List<Future<Void>> results = new ArrayList<>(neighbourPackets.size());
 
         @Override
         public void run() {
-            storeMeasurement(MEASUREMENTS.get(Math.toIntExact((getSystemTime() % 100) + 2)));
-            //TODO: svima pošalji generirano mjerenje
+            int m = MEASUREMENTS.get(Math.toIntExact((getSystemTime() % 100) + 2));
+            storeMeasurement(m);
+
+            for (DatagramPacket packet : neighbourPackets) {
+                results.add(pool.submit(new SendWork(packet, m)));
+            }
+
+            for (Future<Void> r : results) {
+                try {
+                    r.get();
+                } catch (InterruptedException | ExecutionException ignored) {
+                }
+            }
+        }
+    }
+
+    private class SendWork implements Callable<Void> {
+        private DatagramPacket packet;
+        private int measurement;
+
+        private SendWork(DatagramPacket packet, int measurement) {
+            this.packet = packet;
+            this.measurement = measurement;
+        }
+
+        @Override
+        public Void call() throws Exception {
+            DatagramSocket socket = new SimpleSimulatedDatagramSocket(lossRate, averageDelay);
+            boolean sendingComplete = false;
+            ByteBuffer b = ByteBuffer.allocate(Integer.BYTES);
+            b.putInt(measurement);
+            packet.setData(b.array());
+            packet.setLength(Integer.BYTES);
+
+            while (!sendingComplete) {
+                socket.send(packet);
+                DatagramPacket rcvPacket = new DatagramPacket(new byte[BUFFER_SIZE], BUFFER_SIZE);
+                String reception = new String(rcvPacket.getData(), rcvPacket.getOffset(), rcvPacket.getLength());
+
+                if (reception.toLowerCase().equals(RECEIVED_SIGNAL)) {
+                    sendingComplete = true;
+                }
+                try {
+                    socket.receive(rcvPacket);
+                } catch (SocketTimeoutException ignored) {
+                }
+            }
+
+            return null;
         }
     }
 }

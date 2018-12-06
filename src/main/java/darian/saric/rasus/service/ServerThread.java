@@ -11,9 +11,8 @@ import java.net.DatagramSocket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static darian.saric.rasus.Node.BUFFER_SIZE;
-
 public class ServerThread implements Runnable {
+    private static final byte[] RECEIVED_SIGNAL_BYTES = Node.RECEIVED_SIGNAL.getBytes();
     private Node main;
     private ExecutorService threadPool = Executors.newFixedThreadPool
             (Runtime.getRuntime().availableProcessors() - 1);
@@ -41,7 +40,7 @@ public class ServerThread implements Runnable {
 
 //            datagramSocket.bind(new InetSocketAddress("localhost", port));
             while (active) {
-                byte[] rcvBuf = new byte[BUFFER_SIZE]; // received bytes
+                byte[] rcvBuf = new byte[Integer.BYTES]; // received bytes
                 DatagramPacket packet = new DatagramPacket(rcvBuf, rcvBuf.length);
                 datagramSocket.receive(packet);
                 threadPool.submit(new ClientWorker(datagramSocket, packet));
@@ -76,8 +75,8 @@ public class ServerThread implements Runnable {
 //                System.out.println("Server sends: " + rcvStr.toUpperCase());
 
                 // create a DatagramPacket for sending packets
-                DatagramPacket sendPacket = new DatagramPacket("received".getBytes(),
-                        BUFFER_SIZE, packet.getAddress(), packet.getPort());
+                DatagramPacket sendPacket = new DatagramPacket(RECEIVED_SIGNAL_BYTES,
+                        RECEIVED_SIGNAL_BYTES.length, packet.getAddress(), packet.getPort());
                 // send packet
                 socket.send(sendPacket); //SENDTO
                 storeMeasurement(json);
