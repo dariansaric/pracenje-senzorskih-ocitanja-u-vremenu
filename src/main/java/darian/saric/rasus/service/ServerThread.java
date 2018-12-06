@@ -11,6 +11,8 @@ import java.net.DatagramSocket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static darian.saric.rasus.Node.BUFFER_SIZE;
+
 public class ServerThread implements Runnable {
     private static final byte[] RECEIVED_SIGNAL_BYTES = Node.RECEIVED_SIGNAL.getBytes();
     private Node main;
@@ -40,7 +42,7 @@ public class ServerThread implements Runnable {
 
 //            datagramSocket.bind(new InetSocketAddress("localhost", port));
             while (active) {
-                byte[] rcvBuf = new byte[Integer.BYTES]; // received bytes
+                byte[] rcvBuf = new byte[BUFFER_SIZE]; // received bytes
                 DatagramPacket packet = new DatagramPacket(rcvBuf, rcvBuf.length);
                 datagramSocket.receive(packet);
                 threadPool.submit(new ClientWorker(datagramSocket, packet));

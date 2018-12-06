@@ -4,6 +4,7 @@ import darian.saric.rasus.network.EmulatedSystemClock;
 import darian.saric.rasus.network.SimpleSimulatedDatagramSocket;
 import darian.saric.rasus.util.ScalarTimestamp;
 import darian.saric.rasus.util.VectorTimestamp;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.net.*;
@@ -19,11 +20,15 @@ public class Node {
     //todo: podešavanje i pokretanje poslužitelja
     //ToDo: testovi na 2,3 čvora
     public static final String RECEIVED_SIGNAL = "received";
-    private static final int BUFFER_SIZE = 256; // received bytes
+    public static final int BUFFER_SIZE = 256; // received bytes
+    /**
+     * {@link Path} do podataka o mjerenjima
+     */
+    private static final Path DATA_PATH = Paths.get("src/main/resources/mjerenja.csv");
     private static final Path NETWORK_CONFIG_PATH = Paths.get("network.config");
-    private static final List<Integer> MEASUREMENTS = fillMeasurements();
     private static final long MEASUREMENT_TIME_THRESHOLD_MILIS = 5000;
     private static final long GENERATE_MEASUREMENT_INTERVAL_MILIS = 1000;
+    private static final int NETWORK_CONFIG_PARAM_COUNT = 4;
     private static InetAddress SYSTEM_HOST_ADDRESS;
 
     static {
@@ -34,6 +39,7 @@ public class Node {
         }
     }
 
+    private final List<Integer> MEASUREMENTS = fillMeasurements();
     private List<DatagramPacket> neighbourPackets = new LinkedList<>();
     private ExecutorService pool;
     private Set<Integer> measurements = new CopyOnWriteArraySet<>();
@@ -49,28 +55,24 @@ public class Node {
     private int averageDelay;
 
     private Node(String name) throws IOException {
-        for (String l : Files.readAllLines(NETWORK_CONFIG_PATH)) {
-            String[] tokens = l.split("\\s+");
-
-            if (tokens[0].equals(name)) {
-                port = Integer.parseInt(tokens[1]);
-                lossRate = Double.parseDouble(tokens[2]);
-                averageDelay = Integer.parseInt(tokens[3]);
-            } else {
-                neighbourPackets.add(
-                        new DatagramPacket(
-                                new byte[BUFFER_SIZE], BUFFER_SIZE, SYSTEM_HOST_ADDRESS,
-                                Integer.parseInt(tokens[1]))); // predajem prazan buffer kako bih ga kasnije napunio
-            }
-
-            // todo: provjeri ispravnost sadržaja konfiguracijske datoteke
-        }
-
+        configureNode(name);
         pool = Executors.newFixedThreadPool(neighbourPackets.size());
     }
 
-    private static List<Integer> fillMeasurements() {
-        return new ArrayList<>();
+    private static List<Integer> fillMeasurements() throws IOException {
+        final String first = "Temperature,Pressure,Humidity,CO,NO2,SO2,";
+        List<Integer> list = new LinkedList<>();
+
+        for (String s : Files.readAllLines(DATA_PATH)) {
+            if (s.equals(first)) {
+                continue;
+            }
+
+            String[] n = s.replaceAll(",", ", ").split(",");
+            list.add(n[3].trim().isEmpty() ? null : Integer.parseInt(n[3].trim()));
+        }
+
+        return list;
     }
 
     public static void main(String[] args) throws IOException {
@@ -86,6 +88,34 @@ public class Node {
 
 
         node.pool.shutdown();
+    }
+
+    private void configureNode(String name) throws IOException {
+        List<String> readAllLines = Files.readAllLines(NETWORK_CONFIG_PATH);
+        nodeNumber = readAllLines.size();
+        for (int i = 0; i < nodeNumber; i++) {
+            String l = readAllLines.get(i);
+            String[] tokens = l.split("\\s+");
+            if (tokens.length != NETWORK_CONFIG_PARAM_COUNT) {
+                throw new IOException("neispravan redak konfiguracijske datoteke" + Arrays.toString(tokens));
+            }
+
+            try {
+                if (tokens[0].equals(name)) {
+                    port = Integer.parseInt(tokens[1]);
+                    lossRate = Double.parseDouble(tokens[2]);
+                    averageDelay = Integer.parseInt(tokens[3]);
+                    nodeIndex = i;
+                } else {
+                    neighbourPackets.add(
+                            new DatagramPacket(
+                                    new byte[BUFFER_SIZE], BUFFER_SIZE, SYSTEM_HOST_ADDRESS,
+                                    Integer.parseInt(tokens[1]))); // predajem prazan buffer kako bih ga kasnije napunio
+                }
+            } catch (NumberFormatException e) {
+                throw new IOException("neispravan redak konfiguracijske datoteke" + Arrays.toString(tokens), e);
+            }
+        }
     }
 
     public int getPort() {
@@ -133,16 +163,8 @@ public class Node {
         return nodeNumber;
     }
 
-    public void setNodeNumber(int nodeNumber) {
-        this.nodeNumber = nodeNumber;
-    }
-
     public int getNodeIndex() {
         return nodeIndex;
-    }
-
-    public void setNodeIndex(int nodeIndex) {
-        this.nodeIndex = nodeIndex;
     }
 
     public void noteEvent() {
@@ -218,11 +240,14 @@ public class Node {
         public Void call() throws Exception {
             DatagramSocket socket = new SimpleSimulatedDatagramSocket(lossRate, averageDelay);
             boolean sendingComplete = false;
+            JSONObject object = new JSONObject();
+            object.put("co", measurement);
+            object.put("scalartimestamp", nodeIndex);
+            lastTimestamp.setVectorParameter(nodeIndex, eventCount.incrementAndGet());
+            object.put("vectortimestamp", lastTimestamp.getVector().toArray());
             ByteBuffer b = ByteBuffer.allocate(Integer.BYTES);
             b.putInt(measurement);
-            packet.setData(b.array());
-            packet.setLength(Integer.BYTES);
-
+            packet.setData(object.toString().getBytes());
             while (!sendingComplete) {
                 socket.send(packet);
                 DatagramPacket rcvPacket = new DatagramPacket(new byte[BUFFER_SIZE], BUFFER_SIZE);
