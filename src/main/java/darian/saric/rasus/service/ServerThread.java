@@ -17,7 +17,7 @@ public class ServerThread implements Runnable {
     private static final byte[] RECEIVED_SIGNAL_BYTES = Node.RECEIVED_SIGNAL.getBytes();
     private Node main;
     private ExecutorService threadPool = Executors.newFixedThreadPool
-            (Runtime.getRuntime().availableProcessors() - 1);
+            (Runtime.getRuntime().availableProcessors() / 2);
     private int port;
     private boolean active = true;
 

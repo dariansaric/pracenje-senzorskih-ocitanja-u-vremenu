@@ -27,7 +27,7 @@ public class Node {
     private static final Path DATA_PATH = Paths.get("src/main/resources/mjerenja.csv");
     private static final Path NETWORK_CONFIG_PATH = Paths.get("src/main/resources/network.config");
     private static final long MEASUREMENT_TIME_THRESHOLD_MILIS = 5000;
-    private static final long GENERATE_MEASUREMENT_INTERVAL_MILIS = 1000;
+    private static final long GENERATE_MEASUREMENT_INTERVAL_SECONDS = 1;
     private static final int NETWORK_CONFIG_PARAM_COUNT = 4;
     private static InetAddress SYSTEM_HOST_ADDRESS;
 
@@ -41,7 +41,7 @@ public class Node {
 
     private final List<Integer> MEASUREMENTS = fillMeasurements();
     private List<DatagramPacket> neighbourPackets = new LinkedList<>();
-    private ExecutorService pool;
+    //    private ExecutorService pool;
     private Set<Integer> measurements = new CopyOnWriteArraySet<>();
     private Map<ScalarTimestamp, Integer> scalarTimestamps = new ConcurrentHashMap<>();
     private Map<VectorTimestamp, Integer> vectorTimestamps = new ConcurrentHashMap<>();
@@ -53,11 +53,13 @@ public class Node {
     private int port;
     private double lossRate;
     private int averageDelay;
+    private ScheduledExecutorService service = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors() / 2);
+    private Timer calcTimer = new Timer(true);
 
     private Node(String name) throws IOException {
         configureNode(name);
         lastTimestamp = new VectorTimestamp(new int[nodeNumber]);
-        pool = Executors.newFixedThreadPool(neighbourPackets.size());
+//        pool = Executors.newFixedThreadPool(neighbourPackets.size());
     }
 
     private static List<Integer> fillMeasurements() throws IOException {
@@ -87,8 +89,13 @@ public class Node {
 //        node.storeMeasurement(1);
         node.startTimers();
 
+        //TODO: neki koristan posao
+        node.shutdownTimers();
+    }
 
-        node.pool.shutdown();
+    private void shutdownTimers() {
+        service.shutdown();
+        calcTimer.cancel();
     }
 
     private void configureNode(String name) throws IOException {
@@ -132,10 +139,11 @@ public class Node {
     }
 
     private void startTimers() {
-        Timer calcTimer = new Timer(true);
+        service.scheduleAtFixedRate(new MeasureTask(), 0, GENERATE_MEASUREMENT_INTERVAL_SECONDS, TimeUnit.SECONDS);
+//        Timer measureTimer = new Timer(true);
+//        measureTimer.scheduleAtFixedRate(new MeasureTask(), 0, GENERATE_MEASUREMENT_INTERVAL_MILIS);
+
         calcTimer.scheduleAtFixedRate(new ProccessTask(), 0, MEASUREMENT_TIME_THRESHOLD_MILIS);
-        Timer measureTimer = new Timer(true);
-        measureTimer.scheduleAtFixedRate(new MeasureTask(), 0, GENERATE_MEASUREMENT_INTERVAL_MILIS);
     }
 
     private void storeMeasurement(int i) {
@@ -206,8 +214,9 @@ public class Node {
 //        private synchronized void processData(List<Integer> measurements, Map<ScalarTimestamp, Measurement>)
     }
 
-    private class MeasureTask extends TimerTask {
+    private class MeasureTask implements Runnable {
         private List<Future<Void>> results = new ArrayList<>(neighbourPackets.size());
+        private ExecutorService pool = Executors.newFixedThreadPool(neighbourPackets.size());
 
         @Override
         public void run() {
@@ -250,16 +259,17 @@ public class Node {
             packet.setData(object.toString().getBytes());
             while (!sendingComplete) {
                 socket.send(packet);
-                DatagramPacket rcvPacket = new DatagramPacket(new byte[BUFFER_SIZE], BUFFER_SIZE);
-                String reception = new String(rcvPacket.getData(), rcvPacket.getOffset(), rcvPacket.getLength());
-
-                if (reception.toLowerCase().equals(RECEIVED_SIGNAL)) {
-                    sendingComplete = true;
-                }
                 try {
+                    DatagramPacket rcvPacket = new DatagramPacket(new byte[BUFFER_SIZE], BUFFER_SIZE);
                     socket.receive(rcvPacket);
+                    String reception = new String(rcvPacket.getData(), rcvPacket.getOffset(), rcvPacket.getLength());
+
+                    if (reception.toLowerCase().equals(RECEIVED_SIGNAL)) {
+                        sendingComplete = true;
+                    }
                 } catch (SocketTimeoutException ignored) {
                 }
+
             }
 
             return null;
