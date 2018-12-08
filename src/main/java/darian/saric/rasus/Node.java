@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Node {
     //todo: podešavanje i pokretanje poslužitelja
     //ToDo: testovi na 2,3 čvora
+    //todo: threshold za broj retransmisija
     public static final String RECEIVED_SIGNAL = "received";
     public static final int BUFFER_SIZE = 256; // received bytes
     /**
