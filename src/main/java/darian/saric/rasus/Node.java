@@ -169,12 +169,13 @@ public class Node {
     private void storeMeasurement(int i) {
         if (addMeasurement(i)) {
             lastTimestamp.setVectorParameter(nodeIndex, eventCount.incrementAndGet());
-            scalarTimestamps.put(new ScalarTimestamp(systemClock.currentTimeMillis()), i);
+            ScalarTimestamp ts = new ScalarTimestamp(systemClock.currentTimeMillis());
+            scalarTimestamps.put(ts, i);
             vectorTimestamps.put(lastTimestamp, i);
-            System.out.println("-------------------POHRANA----------------------------------------------");
-            System.out.println("generirano mjerenje: " + i + " u " + lastTimestamp.getVector());
-            System.out.println("mapa: " + vectorTimestamps.values());
-            System.out.println("-------------------POHRANA----------------------------------------------");
+//            System.out.println("-------------------POHRANA----------------------------------------------");
+            System.out.println("generirano mjerenje: " + i + " u " + lastTimestamp.getVector() + ", " + ts.getTimestamp());
+//            System.out.println("mapa: " + vectorTimestamps.values());
+//            System.out.println("-------------------POHRANA----------------------------------------------");
         }
     }
 
@@ -188,10 +189,10 @@ public class Node {
             lastTimestamp = new VectorTimestamp(vector);
             scalarTimestamps.put(new ScalarTimestamp(scalar), m);
             vectorTimestamps.put(lastTimestamp, m);
-            System.out.println("-------------------POHRANA----------------------------------------------");
-            System.out.println("primljeno mjerenje: " + m + " u " + lastTimestamp.getVector());
-            System.out.println("mapa: " + vectorTimestamps.values());
-            System.out.println("-------------------POHRANA----------------------------------------------");
+//            System.out.println("-------------------POHRANA----------------------------------------------");
+            System.out.println("POHRANA:primljeno mjerenje: " + m + " u " + lastTimestamp.getVector() + ", " + scalar);
+//            System.out.println("mapa: " + vectorTimestamps.values());
+//            System.out.println("-------------------POHRANA----------------------------------------------");
         }
     }
 

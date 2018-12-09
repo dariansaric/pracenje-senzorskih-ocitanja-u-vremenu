@@ -84,9 +84,9 @@ public class ServerThread implements Runnable {
                         RECEIVED_SIGNAL_BYTES.length, packet.getAddress(), packet.getPort());
                 // send packet
                 socket.send(sendPacket); //SENDTO
-                System.out.println("----------------------PRIMANJE-" + packet.getPort() + "-------------------");
+//                System.out.println("----------------------PRIMANJE-" + packet.getPort() + "-------------------");
                 storeMeasurement(json);
-                System.out.println("----------------------PRIMANJE-" + packet.getPort() + "-------------------");
+//                System.out.println("----------------------PRIMANJE-" + packet.getPort() + "-------------------");
             } catch (IOException e) {
                 e.printStackTrace();
             }

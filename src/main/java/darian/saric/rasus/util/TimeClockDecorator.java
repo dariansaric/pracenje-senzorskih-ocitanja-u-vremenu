@@ -10,16 +10,8 @@ public class TimeClockDecorator {
         this.emulatedSystemClock = emulatedSystemClock;
     }
 
-//    public EmulatedSystemClock getEmulatedSystemClock() {
-//        return emulatedSystemClock;
-//    }
-
-    public long getOffset() {
-        return offset;
-    }
-
     public void setOffset(long offset) {
-        this.offset = offset;
+        this.offset += offset;
     }
 
     public long currentTimeMillis() {
