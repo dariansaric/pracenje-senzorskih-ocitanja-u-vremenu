@@ -1,14 +1,14 @@
 package darian.saric.rasus.util;
 
 public class ScalarTimestamp implements Comparable<ScalarTimestamp> {
-    private int timestamp;
+    private long timestamp;
 
-    public ScalarTimestamp(int timestamp) {
+    public ScalarTimestamp(long timestamp) {
         this.timestamp = timestamp;
     }
 
     @Override
     public int compareTo(ScalarTimestamp o) {
-        return Integer.compare(timestamp, o.timestamp);
+        return Long.compare(timestamp, o.timestamp);
     }
 }

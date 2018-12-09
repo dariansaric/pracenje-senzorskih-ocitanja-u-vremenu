@@ -2,7 +2,9 @@ package darian.saric.rasus;
 
 import darian.saric.rasus.network.EmulatedSystemClock;
 import darian.saric.rasus.network.SimpleSimulatedDatagramSocket;
+import darian.saric.rasus.service.ServerThread;
 import darian.saric.rasus.util.ScalarTimestamp;
+import darian.saric.rasus.util.TimeClockDecorator;
 import darian.saric.rasus.util.VectorTimestamp;
 import org.json.JSONObject;
 
@@ -17,8 +19,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Node {
-    //todo: podešavanje i pokretanje poslužitelja
-    //ToDo: testovi na 2,3 čvora
+    //todo: popravak greške da se izgubi točno jedno mjerenje vektorskim oznakama
     //todo: threshold za broj retransmisija
     public static final String RECEIVED_SIGNAL = "received";
     public static final int BUFFER_SIZE = 256; // received bytes
@@ -27,8 +28,8 @@ public class Node {
      */
     private static final Path DATA_PATH = Paths.get("src/main/resources/mjerenja.csv");
     private static final Path NETWORK_CONFIG_PATH = Paths.get("src/main/resources/network.config");
-    private static final long MEASUREMENT_TIME_THRESHOLD_MILIS = 5000;
-    private static final long GENERATE_MEASUREMENT_INTERVAL_SECONDS = 1;
+    private static final long MEASUREMENT_TIME_THRESHOLD_MILIS = 20000;
+    private static final long GENERATE_MEASUREMENT_INTERVAL_SECONDS = 5;
     private static final int NETWORK_CONFIG_PARAM_COUNT = 4;
     private static InetAddress SYSTEM_HOST_ADDRESS;
 
@@ -43,19 +44,20 @@ public class Node {
     private final List<Integer> MEASUREMENTS = fillMeasurements();
     private List<DatagramPacket> neighbourPackets = new LinkedList<>();
     //    private ExecutorService pool;
-    private Set<Integer> measurements = new CopyOnWriteArraySet<>();
+    private List<Integer> measurements = new CopyOnWriteArrayList<>();
     private Map<ScalarTimestamp, Integer> scalarTimestamps = new ConcurrentHashMap<>();
     private Map<VectorTimestamp, Integer> vectorTimestamps = new ConcurrentHashMap<>();
     private int nodeNumber;
     private int nodeIndex = 0;
     private VectorTimestamp lastTimestamp;
     private AtomicInteger eventCount = new AtomicInteger();
-    private EmulatedSystemClock systemClock = new EmulatedSystemClock();
+    private TimeClockDecorator systemClock = new TimeClockDecorator(new EmulatedSystemClock());
     private int port;
     private double lossRate;
     private int averageDelay;
     private ScheduledExecutorService service = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors() / 2);
     private Timer calcTimer = new Timer(true);
+//    private ServerThread serverThread = new ServerThread(this);
 
     private Node(String name) throws IOException {
         configureNode(name);
@@ -88,13 +90,24 @@ public class Node {
         Node node = new Node(args[0]);
 
 //        node.storeMeasurement(1);
-        node.startTimers();
+        Scanner scanner = new Scanner(System.in);
+        boolean c = true;
+        while (c) {
+            switch (scanner.nextLine().toLowerCase()) {
+                case "end":
+                    c = false;
+                    break;
+                case "start":
+                    node.startup();
+                    break;
+            }
+        }
 
-        //TODO: neki koristan posao
-        node.shutdownTimers();
+        scanner.close();
+        node.shutdown();
     }
 
-    private void shutdownTimers() {
+    private void shutdown() {
         service.shutdown();
         calcTimer.cancel();
     }
@@ -139,19 +152,29 @@ public class Node {
         return averageDelay;
     }
 
-    private void startTimers() {
-        service.scheduleAtFixedRate(new MeasureTask(), 0, GENERATE_MEASUREMENT_INTERVAL_SECONDS, TimeUnit.SECONDS);
-//        Timer measureTimer = new Timer(true);
-//        measureTimer.scheduleAtFixedRate(new MeasureTask(), 0, GENERATE_MEASUREMENT_INTERVAL_MILIS);
+    private void startup() {
+        Thread t = new Thread(new ServerThread(this));
+        t.setDaemon(true);
+        t.start();
+        service.scheduleAtFixedRate(new MeasureTask(),
+                GENERATE_MEASUREMENT_INTERVAL_SECONDS,
+                GENERATE_MEASUREMENT_INTERVAL_SECONDS,
+                TimeUnit.SECONDS);
 
-        calcTimer.scheduleAtFixedRate(new ProccessTask(), 0, MEASUREMENT_TIME_THRESHOLD_MILIS);
+        calcTimer.scheduleAtFixedRate(new ProccessTask(),
+                MEASUREMENT_TIME_THRESHOLD_MILIS,
+                MEASUREMENT_TIME_THRESHOLD_MILIS);
     }
 
     private void storeMeasurement(int i) {
         if (addMeasurement(i)) {
             lastTimestamp.setVectorParameter(nodeIndex, eventCount.incrementAndGet());
-//            scalarTimestamps.put(new ScalarTimestamp(eventCount.get()), i);
+            scalarTimestamps.put(new ScalarTimestamp(systemClock.currentTimeMillis()), i);
             vectorTimestamps.put(lastTimestamp, i);
+            System.out.println("-------------------POHRANA----------------------------------------------");
+            System.out.println("generirano mjerenje: " + i + " u " + lastTimestamp.getVector());
+            System.out.println("mapa: " + vectorTimestamps.values());
+            System.out.println("-------------------POHRANA----------------------------------------------");
         }
     }
 
@@ -159,12 +182,16 @@ public class Node {
         return measurements.add(m);
     }
 
-    public synchronized void storeMeasurement(int m, int scalar, int[] vector) {
+    public synchronized void storeMeasurement(int m, long scalar, int[] vector) {
         if (addMeasurement(m)) {
             vector[nodeIndex] = eventCount.incrementAndGet();
             lastTimestamp = new VectorTimestamp(vector);
-//            scalarTimestamps.put(new ScalarTimestamp(scalar), m);
+            scalarTimestamps.put(new ScalarTimestamp(scalar), m);
             vectorTimestamps.put(lastTimestamp, m);
+            System.out.println("-------------------POHRANA----------------------------------------------");
+            System.out.println("primljeno mjerenje: " + m + " u " + lastTimestamp.getVector());
+            System.out.println("mapa: " + vectorTimestamps.values());
+            System.out.println("-------------------POHRANA----------------------------------------------");
         }
     }
 
@@ -172,28 +199,37 @@ public class Node {
         return nodeNumber;
     }
 
-    public int getNodeIndex() {
-        return nodeIndex;
-    }
-
-    public void noteEvent() {
-        eventCount.incrementAndGet();
-    }
-
-    private int getEventCount() {
-        return eventCount.get();
-    }
+//    public int getNodeIndex() {
+//        return nodeIndex;
+//    }
+//
+//    public void noteEvent() {
+//        eventCount.incrementAndGet();
+//    }
+//
+//    private int getEventCount() {
+//        return eventCount.get();
+//    }
 
     public long getSystemTime() {
         return systemClock.currentTimeMillis();
+    }
+
+    public void setOffset(long l) {
+        systemClock.setOffset(l);
     }
 
     private class ProccessTask extends TimerTask {
 
         @Override
         public void run() {
+//            if(port == 10001) {
+//                return;
+//            }
             System.out.println("Obrađujem podatke...");
-            double average = measurements.stream()
+            double average = measurements
+//                    .subList(measurements.size() - 5, measurements.size())
+                    .stream()
                     .mapToInt(Integer::intValue).average().orElse(0);
 
             Map<ScalarTimestamp, Integer> map1 = new TreeMap<>(scalarTimestamps);
@@ -204,10 +240,9 @@ public class Node {
                 measurements.clear();
             }
 
-            //TODO: ispis mjerenja i prosjeka
             System.out.println("Prosječno mjerenje za protekli period: " + average);
-            System.out.println("Redoslijed mjerenja skalarnim oznakama: " + map1);
-            System.out.println("Redoslijed mjerenja vektorskim oznakama: " + map2);
+            System.out.println("Redoslijed mjerenja skalarnim oznakama: " + map1.values());
+            System.out.println("Redoslijed mjerenja vektorskim oznakama: " + map2.values());
 
 
         }
@@ -221,7 +256,11 @@ public class Node {
 
         @Override
         public void run() {
+//            if(port == 10001) {
+//                return;
+//            }
             int m = MEASUREMENTS.get(Math.toIntExact((getSystemTime() % 100) + 2));
+
             storeMeasurement(m);
 
             for (DatagramPacket packet : neighbourPackets) {
@@ -252,14 +291,16 @@ public class Node {
             boolean sendingComplete = false;
             JSONObject object = new JSONObject();
             object.put("co", measurement);
-            object.put("scalartimestamp", nodeIndex);
+            object.put("scalartimestamp", systemClock.currentTimeMillis());
             lastTimestamp.setVectorParameter(nodeIndex, eventCount.incrementAndGet());
             object.put("vectortimestamp", lastTimestamp.getVector().toArray());
             ByteBuffer b = ByteBuffer.allocate(Integer.BYTES);
             b.putInt(measurement);
             packet.setData(object.toString().getBytes());
             while (!sendingComplete) {
+                System.out.println("------------------SLANJE-" + packet.getPort() + "----------------------------------------------");
                 socket.send(packet);
+                System.out.println("poslan paket portu: " + packet.getPort() + ": " + object);
                 try {
                     DatagramPacket rcvPacket = new DatagramPacket(new byte[BUFFER_SIZE], BUFFER_SIZE);
                     socket.receive(rcvPacket);
@@ -267,12 +308,14 @@ public class Node {
 
                     if (reception.toLowerCase().equals(RECEIVED_SIGNAL)) {
                         sendingComplete = true;
+                        System.out.println("primljena potvrda");
                     }
                 } catch (SocketTimeoutException ignored) {
+                    System.out.println("Nije primljena potvrda, šaljem ponovno");
                 }
 
             }
-
+            System.out.println("------------------SLANJE-" + packet.getPort() + "----------------------------------------------");
             return null;
         }
     }

@@ -21,6 +21,10 @@ public class ServerThread implements Runnable {
     private int port;
     private boolean active = true;
 
+    public ServerThread(Node main) {
+        this.main = main;
+        setPort(main.getPort());
+    }
 
     public void setMain(Node main) {
         this.main = main;
@@ -38,7 +42,7 @@ public class ServerThread implements Runnable {
     @Override
     public void run() {
         try (DatagramSocket datagramSocket = new SimpleSimulatedDatagramSocket(
-                main.getPort(), main.getLossRate(), main.getAverageDelay())) {
+                port, main.getLossRate(), main.getAverageDelay())) {
 
 //            datagramSocket.bind(new InetSocketAddress("localhost", port));
             while (active) {
@@ -67,10 +71,9 @@ public class ServerThread implements Runnable {
         @Override
         public void run() {
             try {
-                //TODO: parsiranje json objekta
                 JSONObject json = new JSONObject(new String(packet.getData(), packet.getOffset(),
                         packet.getLength()));
-                main.noteEvent();
+//                main.noteEvent();
                 // encode a String into a sequence of bytes using the platform's
                 // default charset
 //                sendBuf = rcvStr.toUpperCase().getBytes();
@@ -81,7 +84,9 @@ public class ServerThread implements Runnable {
                         RECEIVED_SIGNAL_BYTES.length, packet.getAddress(), packet.getPort());
                 // send packet
                 socket.send(sendPacket); //SENDTO
+                System.out.println("----------------------PRIMANJE-" + packet.getPort() + "-------------------");
                 storeMeasurement(json);
+                System.out.println("----------------------PRIMANJE-" + packet.getPort() + "-------------------");
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -89,12 +94,11 @@ public class ServerThread implements Runnable {
 
         private void storeMeasurement(JSONObject json) {
             int co = json.getInt("co");
-            int scalarTimestamp = synchronizeTimestamp(json.getLong("scalartimestamp"));
+            long scalarTimestamp = synchronizeTimestamp(json.getLong("scalartimestamp"));
             int[] vector = new int[main.getNodeNumber()];
             JSONArray array = json.getJSONArray("vectortimestamp");
 
             if (array.length() != main.getNodeNumber()) {
-//             TODO: neka poruka da je poslan neispravan vektor
                 System.out.println("Poslana vektorska oznaka vremena je neispravnih dimenzija");
                 return;
             }
@@ -104,13 +108,16 @@ public class ServerThread implements Runnable {
 //            vector[main.getNodeIndex()] = main.getEventCount();
 
             main.storeMeasurement(co, scalarTimestamp, vector);
+
+
         }
 
-        private synchronized int synchronizeTimestamp(long scalartimestamp) {
-            if (scalartimestamp > main.getSystemTime()) {
-                //TODO: riješi nekako
+        private synchronized long synchronizeTimestamp(long scalartimestamp) {
+            long ts = main.getSystemTime();
+            if (scalartimestamp > ts) {
+                main.setOffset(scalartimestamp - ts + 1);
             }
-            return 0;
+            return scalartimestamp + 1;
         }
     }
 }
